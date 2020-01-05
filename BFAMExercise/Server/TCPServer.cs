@@ -1,4 +1,7 @@
-﻿using System;
+﻿using AsyncAwaitBestPractices;
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -20,6 +23,10 @@ namespace BFAMExercise.Server
         }
         #endregion Properties
 
+        #region events
+        public event EventHandler<TcpClient> OnNewConnection;
+        #endregion events
+
         public TCPServer(string ip, int port)
         {
             IPAddress localAddr = IPAddress.Parse(ip);
@@ -27,7 +34,33 @@ namespace BFAMExercise.Server
             server.Start();
         }
 
-        public async void Listen()
+        public async void ListenAsync()
+        {
+            try
+            {
+                while (true)
+                {
+                    Console.WriteLine("Waiting for a connection...");
+                    TcpClient client = await server.AcceptTcpClientAsync();
+                    OnNewConnection?.Invoke(this, client);
+                    Console.WriteLine("Connected!");
+
+                    CreateSession(client);
+                }
+            }
+            catch (SocketException e)
+            {
+                Console.WriteLine("SocketException: {0}", e);
+                Stop();
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("Exception: {0}", e);
+                Stop();
+            }
+        }
+
+        public void Listen()
         {
             try
             {
@@ -35,7 +68,9 @@ namespace BFAMExercise.Server
                 {
                     Console.WriteLine("Waiting for a connection...");
                     TcpClient client = server.AcceptTcpClient();
+                    OnNewConnection?.Invoke(this, client);
                     Console.WriteLine("Connected!");
+
                     CreateSession(client);
                 }
             }
