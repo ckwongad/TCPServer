@@ -17,7 +17,6 @@ namespace BFAMExercise.Server
     {
         private static UniqueIdGenerator _idGenerator = new UniqueIdGenerator();
 
-        private readonly char _delimiter = ' ';
         private readonly TcpClient _tcpClient;
         private readonly IMessageStream _stream;
 
@@ -34,6 +33,7 @@ namespace BFAMExercise.Server
 
         #region events
         public event EventHandler<long> OnClose;
+        public event EventHandler<string> OnMsg;
         #endregion events
 
         public TCPSession(TcpClient client)
@@ -64,7 +64,7 @@ namespace BFAMExercise.Server
                 {
                     clientMsg = await this._stream.ReadAsync().ConfigureAwait(false);
                     Log("Message Received: " + clientMsg);
-                    HandleRequestAsync(clientMsg).SafeFireAndForget(onException: ex => HandleException(ex));
+                    OnMsg?.Invoke(this, clientMsg);
                 }
             }
             catch (Exception e)
@@ -82,7 +82,7 @@ namespace BFAMExercise.Server
                 {
                     clientMsg = this._stream.Read();
                     Log("Message Received: " + clientMsg);
-                    HandleRequestAsync(clientMsg).SafeFireAndForget(onException: ex => HandleException(ex));
+                    OnMsg?.Invoke(this, clientMsg);
                 }
             }
             catch (Exception e)
@@ -91,36 +91,9 @@ namespace BFAMExercise.Server
             }
         }
 
-        private async Task HandleRequestAsync(string clientMsg)
+        public void Write(string msg)
         {
-            try
-            {
-                IBasicQuoteRequestMessageParser parser = new DelimitedBasicQuoteRequestMessageParser(this._delimiter);
-                var quoteRequestMsg = parser.Parse(clientMsg);
-
-                IBasicQuotation basicQuotation = new BasicQuotation(
-                    new PriceSource.RandomReferencePriceSource(),
-                    new QuoteEngine.ProdAQuoteCalculationEngine());
-                double quote = await basicQuotation.GetQuoteAsync(quoteRequestMsg);
-
-                string reponse = clientMsg + this._delimiter + quote;
-                await this._stream.WriteAsync(reponse);
-                Log("Message sent: " + reponse);
-            }
-            catch (ParseQuoteRequestMessageException ex)
-            {
-                Log(String.Format("Cannot parse {0}:\n{1}", clientMsg, ex.ToString()));
-                this._stream.Write("Error");
-            }
-            catch (BasicQuotationException ex)
-            {
-                Log(String.Format("Cannot get quotation for {0}:\n{1}", clientMsg, ex.ToString()));
-                this._stream.Write("Error");
-            }
-            catch (Exception ex)
-            {
-                HandleException(ex);
-            }
+            _stream.Write(msg);
         }
 
         private async void Poll()

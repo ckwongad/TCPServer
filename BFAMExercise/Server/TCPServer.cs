@@ -1,4 +1,5 @@
-﻿using AsyncAwaitBestPractices;
+﻿using Amib.Threading;
+using AsyncAwaitBestPractices;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -13,6 +14,7 @@ namespace BFAMExercise.Server
     {
         private readonly TcpListener server = null;
         private readonly ConcurrentDictionary<long, TCPSession> sessions = new ConcurrentDictionary<long, TCPSession>();
+        private readonly SmartThreadPool _smartThreadPool = new SmartThreadPool();
 
         #region Properties
         private volatile bool _isStop = false;
@@ -23,15 +25,21 @@ namespace BFAMExercise.Server
         }
         #endregion Properties
 
-        #region events
+        #region Events
         public event EventHandler<TcpClient> OnNewConnection;
-        #endregion events
+        #endregion Events
+
+        #region Delegates
+        public Action<string, Action<string>> RequestHandler;
+        #endregion Delegates
 
         public TCPServer(string ip, int port)
         {
             IPAddress localAddr = IPAddress.Parse(ip);
             server = new TcpListener(localAddr, port);
             server.Start();
+
+            _smartThreadPool.MaxThreads = 25;
         }
 
         public async void ListenAsync()
@@ -97,6 +105,26 @@ namespace BFAMExercise.Server
                         if (!sessions.TryRemove(sessionId, out var tmp))
                             Console.WriteLine("Couldn't remove session with session id: {0}.", sessionId);
                     };
+                    session.OnMsg += (sender, msg) => {
+                        _smartThreadPool.QueueWorkItem(() => {
+                            try
+                            {
+                                if (RequestHandler == null)
+                                {
+                                    throw new NotImplementedException("Should register at least one request handler");
+                                }
+                                else
+                                {
+                                    RequestHandler.Invoke(msg, session.Write);
+                                }
+                            }
+                            catch (Exception e)
+                            {
+                                Console.WriteLine("Error in handling request. {0}", e);
+                                session.Close();
+                            }
+                        });
+                    };
                     session.StartAsync();
                     //Thread t = new Thread(session.Start);
                     //t.Start();
@@ -118,7 +146,13 @@ namespace BFAMExercise.Server
         {
             var reportTemplate = @"
 =====================================================
-# of active threads in threadpool: {0}
+.Net threadpool
+# of active threads: {0}
+
+Worker threadpool
+# of active threads: {3}
+# of threads in use: {4}
+
 Total # of threads: {1}
 Total # of sessions: {2}
 =====================================================
@@ -128,7 +162,7 @@ Total # of sessions: {2}
             ThreadPool.GetMaxThreads(out maxT, out tmp);
             ThreadPool.GetAvailableThreads(out AvailableT, out tmp);
             int totalThreads = System.Diagnostics.Process.GetCurrentProcess().Threads.Count;
-            Console.WriteLine(reportTemplate, maxT - AvailableT, totalThreads, sessions.Count);
+            Console.WriteLine(reportTemplate, maxT - AvailableT, totalThreads, sessions.Count, _smartThreadPool.InUseThreads, _smartThreadPool.ActiveThreads);
 
         }
 
