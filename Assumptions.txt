@@ -1,0 +1,2 @@
+- each message ends with \n
+- max. length of each message is 256 bytes

@@ -1,0 +1,3 @@
+- is stream write thread-safe?
+- use IOC framework
+- use log4net library (probably)
