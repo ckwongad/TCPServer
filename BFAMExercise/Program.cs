@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace BFAMExercise
 {
@@ -6,7 +8,19 @@ namespace BFAMExercise
     {
         static void Main(string[] args)
         {
-            new Server.TCPServer("127.0.0.1", 3000).Listen();
+            var server = new Server.TCPServer("127.0.0.1", 3000);
+            server.Listen();
+
+            new Thread(() =>
+            {
+                while (!server.IsStop)
+                {
+                    server.WriteReport();
+                    Thread.Sleep(1000);
+                }
+            }).Start();
+
+            Console.Read();
         }
     }
 }

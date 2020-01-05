@@ -11,6 +11,15 @@ namespace BFAMExercise.Server
         private readonly TcpListener server = null;
         private readonly ConcurrentDictionary<long, TCPSession> sessions = new ConcurrentDictionary<long, TCPSession>();
 
+        #region Properties
+        private volatile bool _isStop = false;
+        public bool IsStop
+        {
+            get { return _isStop; }
+            private set { _isStop = value; }
+        }
+        #endregion Properties
+
         public TCPServer(string ip, int port)
         {
             IPAddress localAddr = IPAddress.Parse(ip);
@@ -18,7 +27,7 @@ namespace BFAMExercise.Server
             server.Start();
         }
 
-        public void Listen()
+        public async void Listen()
         {
             try
             {
@@ -70,10 +79,31 @@ namespace BFAMExercise.Server
             }
         }
 
+        public void WriteReport()
+        {
+            var reportTemplate = @"
+=====================================================
+# of active threads in threadpool: {0}
+Total # of threads: {1}
+Total # of sessions: {2}
+=====================================================
+";
+
+            int maxT, AvailableT, tmp;
+            ThreadPool.GetMaxThreads(out maxT, out tmp);
+            ThreadPool.GetAvailableThreads(out AvailableT, out tmp);
+            int totalThreads = System.Diagnostics.Process.GetCurrentProcess().Threads.Count;
+            Console.WriteLine(reportTemplate, maxT - AvailableT, totalThreads, sessions.Count);
+
+        }
+
         public void Stop()
         {
+            if (IsStop) return;
+
             server.Stop();
             Console.WriteLine("Server stopped.");
+            IsStop = true;
         }
     }
 }
