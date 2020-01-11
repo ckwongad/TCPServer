@@ -22,6 +22,7 @@ namespace BFAMExercise
             {
                 try
                 {
+                    var receiveTime = _sw.ElapsedMilliseconds;
                     IBasicQuoteRequestMessageParser parser = new DelimitedBasicQuoteRequestMessageParser(_delimiter);
                     var quoteRequestMsg = parser.Parse(clientMsg);
 
@@ -30,9 +31,9 @@ namespace BFAMExercise
                         new QuoteEngine.ProdAQuoteCalculationEngine());
                     double quote = basicQuotation.GetQuote(quoteRequestMsg);
 
-                    string reponse = clientMsg + _delimiter + quote;
-                    send(reponse);
-                    Console.WriteLine("Message sent: " + reponse);
+                    string response = clientMsg + _delimiter + quote;
+                    send(response);
+                    Console.WriteLine("Response: {0}. Process Time: {1}", response, _sw.ElapsedMilliseconds - receiveTime);
                 }
                 catch (ParseQuoteRequestMessageException ex)
                 {
