@@ -30,7 +30,7 @@ namespace BFAMExercise.Server
         #endregion Events
 
         #region Delegates
-        public Action<string, Action<string>> RequestHandler;
+        private Action<string, Action<string>> _requestHandling;
         #endregion Delegates
 
         public TCPServer(string ip, int port)
@@ -109,13 +109,13 @@ namespace BFAMExercise.Server
                         _smartThreadPool.QueueWorkItem(() => {
                             try
                             {
-                                if (RequestHandler == null)
+                                if (_requestHandling == null)
                                 {
                                     throw new NotImplementedException("Should register at least one request handler");
                                 }
                                 else
                                 {
-                                    RequestHandler.Invoke(msg, session.Write);
+                                    _requestHandling.Invoke(msg, session.Write);
                                 }
                             }
                             catch (Exception e)
@@ -142,18 +142,24 @@ namespace BFAMExercise.Server
             }
         }
 
+        public void RegisterRequestHandler(Action<string, Action<string>> requestHandler)
+        {
+            this._requestHandling = requestHandler;
+        }
+
         public void WriteReport()
         {
             var reportTemplate = @"
 =====================================================
-.Net threadpool
-# of active threads: {0}
-
-Worker threadpool
+Worker thread pool of server
 # of active threads: {3}
 # of threads in use: {4}
 
+.Net thread pool
+# of active threads: {0}
+
 Total # of threads: {1}
+
 Total # of sessions: {2}
 =====================================================
 ";
