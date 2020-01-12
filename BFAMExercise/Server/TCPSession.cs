@@ -4,6 +4,7 @@ using BFAMExercise.Server.Message.MessageParser;
 using BFAMExercise.Server.MessageStream;
 using BFAMExercise.Server.NetworkSocket;
 using BFAMExercise.Util;
+using Serilog;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -19,6 +20,7 @@ namespace BFAMExercise.Server
 
         private readonly TcpClient _tcpClient;
         private readonly IMessageStream _stream;
+        private readonly ILogger _logger;
 
         #region Properties
         private volatile bool _isClose = false;
@@ -36,11 +38,12 @@ namespace BFAMExercise.Server
         public event EventHandler<string> OnMsg;
         #endregion events
 
-        public TCPSession(TcpClient client)
+        public TCPSession(TcpClient client, ILogger logger)
         {
             SessionId = _idGenerator.GetId();
-            this._tcpClient = client;
-            this._stream = new DelimiterMessageStream(client.GetStream());
+            _tcpClient = client;
+            _stream = new DelimiterMessageStream(client.GetStream());
+            _logger = logger.ForContext<TCPSession>().ForContext("SessionId", SessionId);
         }
 
         public void StartAsync()
@@ -63,13 +66,13 @@ namespace BFAMExercise.Server
                 while (!IsClose)
                 {
                     clientMsg = await this._stream.ReadAsync().ConfigureAwait(false);
-                    Log("Message Received: " + clientMsg);
+                    _logger.Verbose("Message Received: {ClientMsg}", clientMsg);
                     OnMsg?.Invoke(this, clientMsg);
                 }
             }
             catch (Exception e)
             {
-                HandleException(e);
+                LogErrorAndClose(e);
             }
         }
 
@@ -80,14 +83,14 @@ namespace BFAMExercise.Server
             {
                 while (!IsClose)
                 {
-                    clientMsg = this._stream.Read();
-                    Log("Message Received: " + clientMsg);
+                    clientMsg = _stream.Read();
+                    _logger.Verbose("Message Received: {ClientMsg}", clientMsg);
                     OnMsg?.Invoke(this, clientMsg);
                 }
             }
             catch (Exception e)
             {
-                HandleException(e);
+                LogErrorAndClose(e);
             }
         }
 
@@ -105,15 +108,15 @@ namespace BFAMExercise.Server
                     await Task.Delay(300).ConfigureAwait(false);
                     if (!IsConnected)
                     {
-                        Log("Connection Terminated. To close...");
+                        _logger.Information("Connection Terminated. Session will close.");
                         Close();
                     }
                 }
             }
-            catch (Exception e)
+            catch (Exception exception)
             {
-                Log(String.Format("Polling error: {0}", e));
-                Close();
+                _logger.Error("Polling error: {Exception}", exception);
+                LogErrorAndClose(exception);
             }
         }
 
@@ -144,7 +147,7 @@ namespace BFAMExercise.Server
                 }
                 catch (SocketException ex)
                 {
-                    Log(ex.ToString());
+                    _logger.Error(ex.ToString());
                     return false;
                 }
             }
@@ -157,22 +160,17 @@ namespace BFAMExercise.Server
                 _stream.Close();
                 _tcpClient.Close();
                 IsClose = true;
-                Log(String.Format("Sessoin closed", SessionId));
+                _logger.Information("Sessoin closed");
                 OnClose?.Invoke(this, SessionId);
             }
         }
 
-        private void HandleException(Exception ex)
+        private void LogErrorAndClose(Exception error)
         {
             if (IsClose) return;
 
-            Log(String.Format("Session to close on error: {0}", ex));
+            _logger.Error("Session to close on error. {Error}", error);
             Close();
-        }
-
-        private void Log(string msg)
-        {
-            Console.WriteLine("Session #{0}: " + msg, SessionId);
         }
 
         #region IDisposable implementation
@@ -201,5 +199,7 @@ namespace BFAMExercise.Server
         }
 
         #endregion
+
+        ~TCPSession() => Dispose(false);
     }
 }

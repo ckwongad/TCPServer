@@ -1,6 +1,7 @@
 ﻿using BFAMExercise.Quotation;
 using BFAMExercise.RequestHandler;
 using BFAMExercise.Server.Message.MessageParser;
+using Serilog;
 using System;
 using System.Diagnostics;
 using System.Threading;
@@ -14,38 +15,53 @@ namespace BFAMExercise
 
         static void Main(string[] args)
         {
-            var server = new Server.TCPServer("127.0.0.1", 3000);
+            Log.Logger = new LoggerConfiguration()
+                .WriteTo.Async(a => {
+                    a.File("log.txt", rollingInterval: RollingInterval.Day,
+                        outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{SourceContext}] [Session: {SessionId}] {Message:lj}{NewLine}{Exception}",
+                        buffered: true);
+                    a.Console();
+                })
+                .CreateLogger();
+            var logger = Log.ForContext<Program>(); ;
+            AppDomain.CurrentDomain.UnhandledException += (sender, e) => {
+                logger.Fatal(e.ExceptionObject.ToString());
+                Log.CloseAndFlush();
+                throw e.ExceptionObject as Exception;
+            };
 
-            var requestHanlder = new StdRequestHanlder(
-                new DelimitedBasicQuoteRequestMessageParser(' '),
-                new BasicQuotation(
-                    new PriceSource.RandomReferencePriceSource(),
-                    new QuoteEngine.ProdAQuoteCalculationEngine()
-                ));
-            server.RegisterRequestHandler(requestHanlder.ProcessRequest);
-
-            long lastClientTime = 0;
-            server.OnNewConnection += ((sender, client) =>
+            Server.TCPServer server = null;
+            try
             {
-                var currentClientTime = _sw.ElapsedMilliseconds;
-                var interConTime = lastClientTime == 0 ? 0 : currentClientTime - lastClientTime;
-                Console.WriteLine("Connected! Time passed since last connection: {0}ms", interConTime);
-                if (interConTime > 2000) throw new Exception("interConTime > 2000");
-                lastClientTime = currentClientTime;
-            });
+                server = new Server.TCPServer("127.0.0.1", 3000, logger.ForContext<Server.TCPServer>());
 
-            server.ListenAsync();
+                var requestHanlder = new StdRequestHanlder(
+                    new DelimitedBasicQuoteRequestMessageParser(' '),
+                    new BasicQuotation(
+                        new PriceSource.RandomReferencePriceSource(),
+                        new QuoteEngine.ProdAQuoteCalculationEngine()
+                    ),
+                    logger);
+                server.RegisterRequestHandler(requestHanlder.ProcessRequest);
 
-            new Thread(() =>
-            {
-                while (!server.IsStop)
+                long lastClientTime = 0;
+                server.OnNewConnection += ((sender, client) =>
                 {
-                    server.WriteReport();
-                    Thread.Sleep(1000);
-                }
-            }).Start();
+                    var currentClientTime = _sw.ElapsedMilliseconds;
+                    var interConTime = lastClientTime == 0 ? 0 : currentClientTime - lastClientTime;
+                    logger.Information("Connected! Time passed since last connection: {0}ms", interConTime);
+                    lastClientTime = currentClientTime;
+                });
 
-            Console.Read();
+                server.ListenAsync();
+
+                Console.Read();
+            }
+            finally
+            {
+                server?.Stop();
+                Log.CloseAndFlush();
+            }
         }
     }
 }

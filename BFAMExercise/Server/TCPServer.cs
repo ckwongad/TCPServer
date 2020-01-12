@@ -1,8 +1,10 @@
 ﻿using Amib.Threading;
 using AsyncAwaitBestPractices;
+using Serilog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -15,6 +17,7 @@ namespace BFAMExercise.Server
         private readonly TcpListener server = null;
         private readonly ConcurrentDictionary<long, TCPSession> sessions = new ConcurrentDictionary<long, TCPSession>();
         private readonly SmartThreadPool _smartThreadPool = new SmartThreadPool();
+        private readonly ILogger _logger;
 
         #region Properties
         private volatile bool _isStop = false;
@@ -23,6 +26,7 @@ namespace BFAMExercise.Server
             get { return _isStop; }
             private set { _isStop = value; }
         }
+        public int ReportInterval { get; set; } = 1000;
         #endregion Properties
 
         #region Events
@@ -33,13 +37,40 @@ namespace BFAMExercise.Server
         private Action<string, Action<string>> _requestHandling;
         #endregion Delegates
 
-        public TCPServer(string ip, int port)
+        private static ILogger GetDefaultLogger()
+        {
+            return new LoggerConfiguration()
+                  .WriteTo.Async(a => a.File("serverlog.txt", rollingInterval: RollingInterval.Day,
+                    outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{SourceContext}] [Session: {SessionId}] {Message:lj}{NewLine}{Exception}",
+                    buffered: true))
+                  .CreateLogger();
+        }
+
+        public TCPServer(string ip, int port, ILogger logger)
         {
             IPAddress localAddr = IPAddress.Parse(ip);
             server = new TcpListener(localAddr, port);
             server.Start();
 
             _smartThreadPool.MaxThreads = 25;
+
+            _logger = logger.ForContext<TCPServer>();
+
+            new Thread(() =>
+            {
+                while (!IsStop)
+                {
+                    WriteReport();
+                    Thread.Sleep(ReportInterval);
+                }
+            }).Start();
+        }
+
+        public TCPServer(string ip, int port)
+            : this(ip,
+                  port,
+                  GetDefaultLogger())
+        {
         }
 
         public async void ListenAsync()
@@ -48,22 +79,21 @@ namespace BFAMExercise.Server
             {
                 while (true)
                 {
-                    Console.WriteLine("Waiting for a connection...");
+                    _logger.Verbose("Waiting for a connection...");
                     TcpClient client = await server.AcceptTcpClientAsync();
                     OnNewConnection?.Invoke(this, client);
-                    Console.WriteLine("Connected!");
 
                     CreateSession(client);
                 }
             }
             catch (SocketException e)
             {
-                Console.WriteLine("SocketException: {0}", e);
+                _logger.Fatal("SocketException: {0}", e);
                 Stop();
             }
             catch (Exception e)
             {
-                Console.WriteLine("Exception: {0}", e);
+                _logger.Fatal("Exception: {0}", e);
                 Stop();
             }
         }
@@ -74,22 +104,21 @@ namespace BFAMExercise.Server
             {
                 while (true)
                 {
-                    Console.WriteLine("Waiting for a connection...");
+                    _logger.Verbose("Waiting for a connection...");
                     TcpClient client = server.AcceptTcpClient();
                     OnNewConnection?.Invoke(this, client);
-                    Console.WriteLine("Connected!");
 
                     CreateSession(client);
                 }
             }
             catch (SocketException e)
             {
-                Console.WriteLine("SocketException: {0}", e);
+                _logger.Fatal("SocketException: {0}", e);
                 Stop();
             }
             catch (Exception e)
             {
-                Console.WriteLine("Exception: {0}", e);
+                _logger.Fatal("Exception: {0}", e);
                 Stop();
             }
         }
@@ -98,12 +127,12 @@ namespace BFAMExercise.Server
         {
             try
             {
-                var session = new TCPSession(client);
+                var session = new TCPSession(client, _logger);
                 if (sessions.TryAdd(session.SessionId, session))
                 {
                     session.OnClose += (sender, sessionId) => {
                         if (!sessions.TryRemove(sessionId, out var tmp))
-                            Console.WriteLine("Couldn't remove session with session id: {0}.", sessionId);
+                            _logger.Error("Couldn't remove session with session id: {0}.", sessionId);
                     };
                     session.OnMsg += (sender, msg) => {
                         _smartThreadPool.QueueWorkItem(() => {
@@ -120,7 +149,7 @@ namespace BFAMExercise.Server
                             }
                             catch (Exception e)
                             {
-                                Console.WriteLine("Error in handling request. {0}", e);
+                                _logger.Error("Error in handling request. {0}", e);
                                 session.Close();
                             }
                         });
@@ -128,17 +157,17 @@ namespace BFAMExercise.Server
                     session.StartAsync();
                     //Thread t = new Thread(session.Start);
                     //t.Start();
-                    Console.WriteLine("Session #{0} started. Total # of sessions: {1}", session.SessionId, sessions.Count);
+                    _logger.Information("Session #{0} started. Total # of sessions: {1}", session.SessionId, sessions.Count);
                 }
                 else
                 {
-                    Console.WriteLine("Couldn't add session with session id: {0}.", session.SessionId);
+                    _logger.Error("Couldn't add session with session id: {0}.", session.SessionId);
                     session.Close();
                 }
             }
             catch (Exception e)
             {
-                Console.WriteLine("Failed to create session: {0}.", e);
+                _logger.Error("Failed to create session: {0}.", e);
             }
         }
 
@@ -147,7 +176,7 @@ namespace BFAMExercise.Server
             this._requestHandling = requestHandler;
         }
 
-        public void WriteReport()
+        private void WriteReport()
         {
             var reportTemplate = @"
 =====================================================
@@ -168,7 +197,9 @@ Total # of sessions: {2}
             ThreadPool.GetMaxThreads(out maxT, out tmp);
             ThreadPool.GetAvailableThreads(out AvailableT, out tmp);
             int totalThreads = System.Diagnostics.Process.GetCurrentProcess().Threads.Count;
-            Console.WriteLine(reportTemplate, maxT - AvailableT, totalThreads, sessions.Count, _smartThreadPool.InUseThreads, _smartThreadPool.ActiveThreads);
+            _logger.Information(reportTemplate, maxT - AvailableT,
+                totalThreads, sessions.Count,
+                _smartThreadPool.InUseThreads, _smartThreadPool.ActiveThreads);
 
         }
 
@@ -177,8 +208,13 @@ Total # of sessions: {2}
             if (IsStop) return;
 
             server.Stop();
-            Console.WriteLine("Server stopped.");
+            _logger.Information("Server stopped.");
             IsStop = true;
+        }
+
+        ~TCPServer()
+        {
+            Stop();
         }
     }
 }

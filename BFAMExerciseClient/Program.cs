@@ -1,4 +1,5 @@
 ﻿using BFAMExercise.Server.MessageStream;
+using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -12,14 +13,26 @@ namespace BFAMExerciseClient
     {
         static void Main(string[] args)
         {
-            var sw = Stopwatch.StartNew();
-            sw.Start();
-            var startTime = sw.ElapsedMilliseconds;
+            while (true)
+            {
+                Log.Logger = new LoggerConfiguration()
+                    .WriteTo.Async(a =>
+                    {
+                        a.File("log.txt", rollingInterval: RollingInterval.Day, buffered: true);
+                        a.Console();
+                    })
+                    .CreateLogger();
 
-            BeesWithGuns.Attack(50, 5);
+                var sw = Stopwatch.StartNew();
+                sw.Start();
+                var startTime = sw.ElapsedMilliseconds;
 
-            Console.WriteLine("Completion Time: {0}.", sw.ElapsedMilliseconds - startTime);
-            Console.Read();
+                BeesWithGuns.Attack(100, 5);
+
+                Log.Logger.Information("Completion Time: {0}.", sw.ElapsedMilliseconds - startTime);
+                Log.CloseAndFlush();
+                Console.Read();
+            }
         }
     }
 }
