@@ -10,6 +10,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace BFAMExercise.Server
@@ -22,12 +23,21 @@ namespace BFAMExercise.Server
         private readonly IMessageStream _stream;
         private readonly ILogger _logger;
 
+        private readonly Object _thisLock = new object();
+
         #region Properties
-        private volatile bool _isClose = false;
+        private volatile int _isClose = 0;
         public bool IsClose
         {
-            get { return _isClose; }
-            private set { _isClose = value; }
+            get { return _isClose == 1; }
+            private set { _isClose = value ? 1 : 0; }
+        }
+
+        private volatile int _isActive = 0;
+        public bool IsActive
+        {
+            get { return _isActive == 1; }
+            private set { _isActive = value ? 1 : 0; }
         }
 
         public long SessionId { get; private set; }
@@ -48,14 +58,20 @@ namespace BFAMExercise.Server
 
         public void StartAsync()
         {
-            Poll();
-            AcceptRequestAsync();
+            if (0 == Interlocked.CompareExchange(ref _isActive, 1, 0))
+            {
+                Poll();
+                AcceptRequestAsync();
+            }
         }
 
         public void Start()
         {
-            Poll();
-            AcceptRequest();
+            if (0 == Interlocked.CompareExchange(ref _isActive, 1, 0))
+            {
+                Poll();
+                AcceptRequest();
+            }
         }
 
         private async void AcceptRequestAsync()
@@ -155,11 +171,11 @@ namespace BFAMExercise.Server
 
         public void Close()
         {
-            if (!IsClose)
+            if (0 == Interlocked.CompareExchange(ref _isClose, 1, 0))
             {
+                IsActive = false;
                 _stream.Close();
                 _tcpClient.Close();
-                IsClose = true;
                 _logger.Information("Sessoin closed");
                 OnClose?.Invoke(this, SessionId);
             }

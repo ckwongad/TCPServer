@@ -3,12 +3,16 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace BFAMExercise.Server.MessageStream
 {
     public class DelimiterMessageStream : IMessageStream
     {
+        private readonly SemaphoreSlim _readSemaphoreSlim = new SemaphoreSlim(1);
+        private readonly SemaphoreSlim _writeSemaphoreSlim = new SemaphoreSlim(1);
+
         private readonly Stream _stream;
         private readonly Queue<string> _messageBuffer = new Queue<string>();
         private byte[] _unprocessedBytes = new byte[0];
@@ -27,6 +31,8 @@ namespace BFAMExercise.Server.MessageStream
         public async Task<string> ReadAsync()
         {
             byte[] streamBytes = new byte[this.MaxLength];
+
+            await _readSemaphoreSlim.WaitAsync();
 
             while (this._messageBuffer.Count == 0)
             {
@@ -56,7 +62,10 @@ namespace BFAMExercise.Server.MessageStream
                 }
             }
 
-            return this._messageBuffer.Dequeue();
+            var msg = this._messageBuffer.Dequeue();
+            _readSemaphoreSlim.Release();
+
+            return msg;
         }
 
         public string Read()
@@ -111,9 +120,11 @@ namespace BFAMExercise.Server.MessageStream
 
         public async Task WriteAsync(string msg)
         {
+            await _writeSemaphoreSlim.WaitAsync();
             byte[] msgByte = System.Text.Encoding.ASCII.GetBytes(msg);
             await this._stream.WriteAsync(msgByte, 0, msgByte.Length);
             this._stream.WriteByte(Separator);
+            _writeSemaphoreSlim.Release();
         }
 
         public void Write(string msg)
