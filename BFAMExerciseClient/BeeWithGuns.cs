@@ -20,7 +20,7 @@ namespace BFAMExerciseClient
         private Dictionary<int, long> _startTimes = new Dictionary<int, long>();
         private ILogger _logger;
 
-        public int MaxDelayTime { get; set; } = 500;
+        public int MaxDelayTime { get; set; } = 5;
 
         public BeeWithGuns(int id, int numRequests)
             : this(id, numRequests, Log.Logger)

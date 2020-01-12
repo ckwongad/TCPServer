@@ -59,6 +59,14 @@ namespace BFAMExercise.Test.Server
         }
 
         [TestMethod]
+        public async Task BeesWithManyGuns_Success()
+        {
+            var result = await BFAMExerciseClient.BeeHive.AttackAsync(1, 500);
+            Assert.IsTrue(result);
+            Assert.IsFalse(_server.IsStop);
+        }
+
+        [TestMethod]
         public void Listen_Success()
         {
             string message = "123 BUY 100";
