@@ -27,7 +27,7 @@ namespace BFAMExerciseClient
                 sw.Start();
                 var startTime = sw.ElapsedMilliseconds;
 
-                BeesWithGuns.Attack(100, 5);
+                BeeHive.Attack(100, 5);
 
                 Log.Logger.Information("Completion Time: {0}.", sw.ElapsedMilliseconds - startTime);
                 Log.CloseAndFlush();

@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace BFAMExerciseClient
 {
-    public class BeesWithGuns
+    public class BeeHive
     {
         public static void Attack(int numBees, int numGunsPerBee)
         {

@@ -53,7 +53,7 @@ namespace BFAMExercise.Test.Server
         [TestMethod]
         public void Bees_with_Gun()
         {
-            BFAMExerciseClient.BeesWithGuns.Attack(100, 5);
+            BFAMExerciseClient.BeeHive.Attack(100, 5);
         }
 
         [TestMethod]
