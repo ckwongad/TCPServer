@@ -6,7 +6,7 @@ namespace BFAMExercise.Server.Message.MessageParser
 {
     public class DelimitedBasicQuoteRequestMessageParser : IBasicQuoteRequestMessageParser
     {
-        private static readonly int numComponents = 3;
+        private static readonly int expectedNumComponents = 3;
 
         private readonly char _delimiter;
 
@@ -25,10 +25,13 @@ namespace BFAMExercise.Server.Message.MessageParser
 
                 string[] msgComponents = msg.Split(this._delimiter);
 
-                if (msgComponents.Length != numComponents)
+                if (msgComponents.Length != expectedNumComponents)
                 {
                     throw new FormatException(
-                        String.Format("Number of message components is {0} instead of {1}. {2}", msgComponents.Length, numComponents, msg));
+                        String.Format("Number of message components is {0} instead of {1}. {2}",
+                            msgComponents.Length, expectedNumComponents, msg
+                        )
+                    );
                 }
 
                 quoteRequestMsg.securityId = int.Parse(msgComponents[0]);
