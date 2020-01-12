@@ -51,36 +51,27 @@ namespace BFAMExercise.Test.Server
         }
 
         [TestMethod]
-        public void Bees_with_Gun()
+        public async Task BeesWithGuns_Success()
         {
-            BFAMExerciseClient.BeeHive.Attack(100, 5);
+            var result = await BFAMExerciseClient.BeeHive.AttackAsync(100, 5);
+            Assert.IsTrue(result);
+            Assert.IsFalse(_server.IsStop);
         }
 
         [TestMethod]
         public void Listen_Success()
         {
-            string message = "123 BUY 100\n";
+            string message = "123 BUY 100";
 
             int count = 0;
             while (count++ < 3)
             {
-                // Translate the Message into ASCII.
-                Byte[] data = System.Text.Encoding.ASCII.GetBytes(message);
-
-                // Send the message to the connected TcpServer. 
-                _stream.Write(data, 0, data.Length);
+                _msgStream.Write(message);
                 Console.WriteLine("Sent: {0}", message);
 
-                // Bytes Array to receive Server Response.
-                data = new Byte[256];
-                String response = String.Empty;
-
-                // Read the Tcp Server Response Bytes.
-                Int32 bytes = _stream.Read(data, 0, data.Length);
-                response = System.Text.Encoding.ASCII.GetString(data, 0, bytes);
+                var response = _msgStream.Read();
                 Console.WriteLine("Received: {0}", response);
-
-                Thread.Sleep(200);
+                Assert.AreEqual(message, response.Substring(0, message.Length));
             }
         }
 

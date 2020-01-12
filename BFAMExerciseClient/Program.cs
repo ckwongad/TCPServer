@@ -27,9 +27,9 @@ namespace BFAMExerciseClient
                 sw.Start();
                 var startTime = sw.ElapsedMilliseconds;
 
-                BeeHive.Attack(100, 5);
+                var result = BeeHive.AttackAsync(100, 5).GetAwaiter().GetResult();
 
-                Log.Logger.Information("Completion Time: {0}.", sw.ElapsedMilliseconds - startTime);
+                Log.Logger.Information("Completion Time: {0}. IsSuccess: {Result}", sw.ElapsedMilliseconds - startTime, result);
                 Log.CloseAndFlush();
                 Console.Read();
             }

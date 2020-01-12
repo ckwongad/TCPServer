@@ -34,7 +34,7 @@ namespace BFAMExerciseClient
             _logger = logger;
         }
 
-        public async Task Attack()
+        public async Task<bool> AttackAsync()
         {
             try
             {
@@ -55,16 +55,19 @@ namespace BFAMExerciseClient
                             _logger.Information("Cient {0} Sent: {1}", _beeId, message);
                         }
 
-                        await CheckReponse();
+                        var isSuccess = await CheckReponseAsync();
 
                         _msgStream.Close();
                         tcpClient.Close();
+
+                        return isSuccess;
                     }
                 }
             }
             catch (Exception e)
             {
                 _logger.Error("Client {0}: {1}.", _beeId, e);
+                return false;
             }
             finally
             {
@@ -72,7 +75,7 @@ namespace BFAMExerciseClient
             }
         }
 
-        private async Task CheckReponse()
+        private async Task<bool> CheckReponseAsync()
         {
             string response = "";
             try
@@ -84,16 +87,13 @@ namespace BFAMExerciseClient
                     var startTime = _startTimes.GetValueOrDefault(int.Parse(response.Split(' ')[0]));
                     _logger.Information("Cient {0} Received: {1}. Process time(ms): {2}",
                         _beeId, response, _sw.ElapsedMilliseconds - startTime);
-                    int maxT, AvailableT, tmp;
-                    ThreadPool.GetMaxThreads(out maxT, out tmp);
-                    ThreadPool.GetAvailableThreads(out AvailableT, out tmp);
-                    int totalThreads = System.Diagnostics.Process.GetCurrentProcess().Threads.Count;
-                    _logger.Information("Active threads in threadpool: {0}. Total thread: {1}.", maxT - AvailableT, totalThreads);
                 }
+                return true;
             }
             catch (Exception e)
             {
                 _logger.Error("Cient {0} encounters error in checking reponse: {1}. {2}", _beeId, response, e);
+                return false;
             }
         }
     }
