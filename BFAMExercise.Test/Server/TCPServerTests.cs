@@ -1,6 +1,10 @@
+using BFAMExercise.Quotation;
+using BFAMExercise.RequestHandler;
 using BFAMExercise.Server;
+using BFAMExercise.Server.Message.MessageParser;
 using BFAMExercise.Server.MessageStream;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Net.Sockets;
@@ -31,9 +35,10 @@ namespace BFAMExercise.Test.Server
 
         private void StartServer()
         {
-            _server = new TCPServer("127.0.0.1", 3000);
-            _thread = new Thread(_server.Listen);
-            _thread.Start();
+            _server = Setup.SetUpServer("127.0.0.1", 3000, Log.Logger);
+            _server.ListenAsync();
+            //_thread = new Thread(_server.Listen);
+            //_thread.Start();
         }
 
         [TestCleanup]
@@ -52,7 +57,7 @@ namespace BFAMExercise.Test.Server
         }
 
         [TestMethod]
-        public void Listen_StateUnderTest_ExpectedBehavior()
+        public void Listen_Success()
         {
             string message = "123 BUY 100\n";
 

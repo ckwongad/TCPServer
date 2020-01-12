@@ -11,8 +11,6 @@ namespace BFAMExercise
 {
     class Program
     {
-        private static readonly Stopwatch _sw = Stopwatch.StartNew();
-
         static void Main(string[] args)
         {
             Log.Logger = new LoggerConfiguration()
@@ -23,7 +21,8 @@ namespace BFAMExercise
                     a.Console();
                 })
                 .CreateLogger();
-            var logger = Log.ForContext<Program>(); ;
+            var logger = Log.ForContext<Program>();
+
             AppDomain.CurrentDomain.UnhandledException += (sender, e) => {
                 logger.Fatal(e.ExceptionObject.ToString());
                 Log.CloseAndFlush();
@@ -33,28 +32,8 @@ namespace BFAMExercise
             Server.TCPServer server = null;
             try
             {
-                server = new Server.TCPServer("127.0.0.1", 3000, logger.ForContext<Server.TCPServer>());
-
-                var requestHanlder = new StdRequestHanlder(
-                    new DelimitedBasicQuoteRequestMessageParser(' '),
-                    new BasicQuotation(
-                        new PriceSource.RandomReferencePriceSource(),
-                        new QuoteEngine.ProdAQuoteCalculationEngine()
-                    ),
-                    logger);
-                server.RegisterRequestHandler(requestHanlder.ProcessRequest);
-
-                long lastClientTime = 0;
-                server.OnNewConnection += ((sender, client) =>
-                {
-                    var currentClientTime = _sw.ElapsedMilliseconds;
-                    var interConTime = lastClientTime == 0 ? 0 : currentClientTime - lastClientTime;
-                    logger.Information("Connected! Time passed since last connection: {0}ms", interConTime);
-                    lastClientTime = currentClientTime;
-                });
-
+                server = Setup.SetUpServer("127.0.0.1", 3000, logger);
                 server.ListenAsync();
-
                 Console.Read();
             }
             finally

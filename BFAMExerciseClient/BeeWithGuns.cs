@@ -12,11 +12,15 @@ namespace BFAMExerciseClient
 {
     class BeeWithGuns
     {
+        private static readonly Random rn = new Random();
+
         private int _beeId, _numRequests;
         private DelimiterMessageStream _msgStream;
         private Stopwatch _sw = Stopwatch.StartNew();
         private Dictionary<int, long> _startTimes = new Dictionary<int, long>();
         private ILogger _logger;
+
+        public int MaxDelayTime { get; set; } = 500;
 
         public BeeWithGuns(int id, int numRequests)
             : this(id, numRequests, Log.Logger)
@@ -44,6 +48,7 @@ namespace BFAMExerciseClient
                         int requestId = 0;
                         while (requestId++ < _numRequests)
                         {
+                            await Task.Delay(rn.Next(0, MaxDelayTime));
                             var message = _beeId + partialMessage + requestId;
                             _startTimes.Add(requestId, _sw.ElapsedMilliseconds);
                             await _msgStream.WriteAsync(message);
