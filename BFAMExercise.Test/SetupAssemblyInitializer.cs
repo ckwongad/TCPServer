@@ -16,5 +16,11 @@ namespace BFAMExercise.Test
                 .WriteTo.Console()
                 .CreateLogger();
         }
+
+        [AssemblyCleanup]
+        public static void AssemblyCleanup()
+        {
+            Log.CloseAndFlush();
+        }
     }
 }
