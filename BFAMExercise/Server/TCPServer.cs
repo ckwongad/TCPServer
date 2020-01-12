@@ -1,6 +1,7 @@
 ﻿using Amib.Threading;
 using AsyncAwaitBestPractices;
 using Serilog;
+using Serilog.Core;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -14,6 +15,15 @@ namespace BFAMExercise.Server
 {
     public class TCPServer
     {
+        private static readonly Lazy<Logger> _defaultLogger =
+            new Lazy<Logger> (() =>
+                new LoggerConfiguration()
+                  .WriteTo.Async(a => a.File("serverlog.txt", rollingInterval: RollingInterval.Day,
+                    outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{SourceContext}] [Session: {SessionId}] {Message:lj}{NewLine}{Exception}",
+                    buffered: true))
+                  .CreateLogger()
+            );
+
         private readonly TcpListener server = null;
         private readonly ConcurrentDictionary<long, TCPSession> sessions = new ConcurrentDictionary<long, TCPSession>();
         private readonly SmartThreadPool _smartThreadPool = new SmartThreadPool();
@@ -36,15 +46,6 @@ namespace BFAMExercise.Server
         #region Delegates
         private Action<string, Action<string>> _requestHandling;
         #endregion Delegates
-
-        private static ILogger GetDefaultLogger()
-        {
-            return new LoggerConfiguration()
-                  .WriteTo.Async(a => a.File("serverlog.txt", rollingInterval: RollingInterval.Day,
-                    outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{SourceContext}] [Session: {SessionId}] {Message:lj}{NewLine}{Exception}",
-                    buffered: true))
-                  .CreateLogger();
-        }
 
         public TCPServer(string ip, int port, ILogger logger)
         {
@@ -69,7 +70,7 @@ namespace BFAMExercise.Server
         public TCPServer(string ip, int port)
             : this(ip,
                   port,
-                  GetDefaultLogger())
+                  _defaultLogger.Value)
         {
         }
 
@@ -209,12 +210,35 @@ Total # of sessions: {2}
 
             server.Stop();
             _logger.Information("Server stopped.");
+            if (_defaultLogger.IsValueCreated) _defaultLogger.Value?.Dispose();
             IsStop = true;
         }
 
-        ~TCPServer()
+        #region IDisposable implementation
+
+        // Disposed flag.
+        private bool _disposed;
+
+        // Implement IDisposable.
+        public void Dispose()
         {
-            Stop();
+            Dispose(true);
+            GC.SuppressFinalize(this);
         }
+
+        protected virtual void Dispose(bool disposingManagedResources)
+        {
+            if (!_disposed)
+            {
+                if (disposingManagedResources)
+                {
+                    Stop();
+                }
+
+                _disposed = true;
+            }
+        }
+
+        #endregion
     }
 }
